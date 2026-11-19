@@ -1,0 +1,24 @@
+cluster = "local"
+rpc_url = "http://127.0.0.1:8899"
+route_id = "local-rpc"
+observer_id = "local-rpc"
+output_dir = "runs"
+
+[submission]
+skip_preflight = false
+preflight_commitment = "finalized"
+rpc_max_retries = 0
+client_resubmissions = 0
+request_timeout_ms = 5000
+
+[observation]
+target_commitment = "finalized"
+poll_interval_ms = 2000
+height_poll_interval_ms = 10000
+deadline_ms = 120000
+websocket_enabled = false
+
+[limits]
+max_in_flight_transactions = 1
+max_http_requests_per_second = 1
+                                            
