@@ -4,7 +4,9 @@ TxTrail is a Rust CLI being built to record and explain the lifecycle of a Solan
 
 ## Current status
 
-Milestone 0 implements configuration loading and validation. The `doctor` command reads a TOML file, checks required fields and supported enum values, and validates positive timeouts, intervals, and limits alongside nonempty strings.
+Milestones 0 and 1 implement configuration validation and the offline evidence model. The library exposes a pure reducer, deterministic replay of decoded events, and evidence-based outcome labels. Synthetic JSONL fixtures exercise success, execution error, rejection, timeout, unresolved deadlines, validity passage, and conflicts. See [milestone 1 notes](milestone-1.md).
+
+ The `doctor` command reads a TOML file, checks required fields and supported enum values, and validates positive timeouts, intervals, and limits alongside nonempty strings.
 
 It does not yet contact an RPC endpoint, check network health, sign or submit transactions, capture events, or generate transaction reports. A valid configuration does not establish that an endpoint is reachable or belongs to the selected cluster.
 
@@ -80,11 +82,11 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-At the milestone 0 review, formatting passed, strict Clippy reported unread configuration fields reserved for later features, and `cargo test` ran zero tests. A successful test command with zero tests does not verify behavior. Manual CLI checks covered valid configuration, malformed TOML, missing fields, unknown commitment values, a zero polling interval, a blank route alias, and a missing file.
+Milestone 1 checks run offline after dependencies are installed. Unit tests cover state transitions and invalid evidence; integration tests replay the synthetic fixtures through the same reducer and verify deterministic outcomes. No validator or public endpoint is used.
 
 ## Planned scope
 
-Later milestones will add an event model, deterministic replay, JSONL capture, offline reports, mocked RPC tests, local transaction submission, and optional low-volume devnet validation. Mainnet submission and paid infrastructure are outside the first release.
+Later milestones will add durable JSONL capture, replay/inspect CLI commands, offline reports, mocked RPC tests, local transaction submission, and optional low-volume devnet validation. Mainnet submission and paid infrastructure are outside the first release.
 
 ## Local files
 

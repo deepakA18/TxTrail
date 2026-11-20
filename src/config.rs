@@ -1,3 +1,4 @@
+use crate::model::Commitment;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -41,14 +42,6 @@ pub struct LimitsConfig {
 pub enum Cluster {
     Local,
     Devnet,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Commitment {
-    Processed,
-    Confirmed,
-    Finalized,
 }
 
 impl Config {

@@ -1,4 +1,4 @@
-mod config;
+use txtrail::config;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
