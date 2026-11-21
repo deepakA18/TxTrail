@@ -109,10 +109,13 @@ async fn run() -> Result<(), String> {
                 println!("Configuration valid; network checks skipped.");
             } else {
                 let rpc = txtrail::rpc::Rpc::new(&config)?;
-                let identity = rpc
-                    .verify_network(&config)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                let identity = tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    rpc.verify_network(&config),
+                )
+                .await
+                .map_err(|_| "Network identity check budget exceeded")?
+                .map_err(|e| e.to_string())?;
                 println!("Network identity verified: {identity}");
                 for method in ["getVersion", "getHealth", "getBlockHeight"] {
                     let params = if method == "getBlockHeight" {
@@ -120,7 +123,13 @@ async fn run() -> Result<(), String> {
                     } else {
                         serde_json::json!([])
                     };
-                    match rpc.call(method, params).await {
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(30),
+                        rpc.call(method, params),
+                    )
+                    .await
+                    .map_err(|_| format!("{method} budget exceeded"))?
+                    {
                         Ok(v) => println!("{method}: {v}"),
                         Err(e) if method == "getHealth" => println!("getHealth unavailable: {e}"),
                         Err(e) => return Err(e.to_string()),

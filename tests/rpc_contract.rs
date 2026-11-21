@@ -59,12 +59,14 @@ fn config(url: String) -> Config {
 #[tokio::test]
 async fn handles_429_500_and_null_status() {
     let (url, task) = server(vec![
-        (429, "Retry-After: 0\r\n", Value::Null),
+        (429, "Retry-After: 1\r\n", Value::Null),
         (500, "", Value::Null),
         (200, "", json!({"value":[null]})),
     ]);
     let rpc = Rpc::new(&config(url)).unwrap();
+    let started = std::time::Instant::now();
     assert!(rpc.status("synthetic", true).await.unwrap().is_none());
+    assert!(started.elapsed() >= Duration::from_secs(1));
     assert_eq!(rpc.drain_diagnostics().len(), 3);
     task.join().unwrap();
 }
@@ -84,7 +86,11 @@ async fn validates_jsonrpc_and_does_not_retry_send() {
 }
 #[tokio::test]
 async fn devnet_identity_mismatch_fails_closed() {
-    let (url, task) = server(vec![(200, "", json!("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"))]);
+    let (url, task) = server(vec![(
+        200,
+        "",
+        json!("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"),
+    )]);
     let c = config(url);
     let rpc = Rpc::new(&c).unwrap();
     assert!(rpc.verify_network(&c).await.is_err());
@@ -101,4 +107,19 @@ fn rejects_unsafe_profiles_and_redacts_errors() {
     );
     assert!(!value.to_string().contains("secret"));
     assert_eq!(value["data"]["err"], "AccountNotFound");
+}
+
+#[tokio::test]
+async fn full_public_genesis_hashes_are_rejected_by_local_profile() {
+    for hash in [
+        "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+        "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+        "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY",
+    ] {
+        assert!(hash.parse::<solana_sdk::hash::Hash>().is_ok());
+        let (url, task) = server(vec![(200, "", json!(hash))]);
+        let c = config(url);
+        assert!(Rpc::new(&c).unwrap().verify_network(&c).await.is_err());
+        task.join().unwrap();
+    }
 }
