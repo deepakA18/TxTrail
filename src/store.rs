@@ -263,3 +263,44 @@ mod writer_failure_tests {
         assert!(writer.finish().await.is_err());
     }
 }
+
+#[cfg(test)]
+mod backpressure_tests {
+    use super::*;
+    #[tokio::test]
+    async fn full_channel_waits_and_preserves_both_events() {
+        let (tx, mut rx) = mpsc::channel::<Pending>(1);
+        let recorder = Recorder {
+            tx,
+            saturated: Arc::new(AtomicBool::new(false)),
+        };
+        let first = recorder.clone();
+        let a =
+            tokio::spawn(async move { first.record(crate::model::example_timeout_event()).await });
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while recorder.tx.capacity() != 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let second = recorder.clone();
+        let b =
+            tokio::spawn(async move { second.record(crate::model::example_timeout_event()).await });
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while !recorder.saturated() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!a.is_finished());
+        assert!(!b.is_finished());
+        for _ in 0..2 {
+            let pending = rx.recv().await.unwrap();
+            pending.ack.send(Ok(pending.event)).unwrap();
+        }
+        a.await.unwrap().unwrap();
+        b.await.unwrap().unwrap();
+    }
+}

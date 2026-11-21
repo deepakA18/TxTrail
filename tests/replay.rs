@@ -14,6 +14,18 @@ fn success() -> Vec<EventEnvelope> {
 fn deterministic_fixtures_have_expected_outcomes() {
     let cases = [
         (
+            include_str!("fixtures/observer-outage.jsonl"),
+            Outcome::FinalizedSuccess,
+        ),
+        (
+            include_str!("fixtures/duplicate-observation.jsonl"),
+            Outcome::FinalizedSuccess,
+        ),
+        (
+            include_str!("fixtures/late-reconciliation.jsonl"),
+            Outcome::FinalizedSuccess,
+        ),
+        (
             include_str!("fixtures/success.jsonl"),
             Outcome::FinalizedSuccess,
         ),

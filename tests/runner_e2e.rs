@@ -19,6 +19,8 @@ fn respond(
     delivered: Arc<AtomicBool>,
     sends: Arc<AtomicUsize>,
     mode: &'static str,
+    recovered: Arc<AtomicBool>,
+    polls: Arc<AtomicUsize>,
 ) {
     stream.set_nonblocking(false).unwrap();
     stream
@@ -47,6 +49,16 @@ fn respond(
             }
         }
     };
+    if mode == "outage"
+        && request["method"] == "getSignatureStatuses"
+        && polls.fetch_add(1, Ordering::SeqCst) < 3
+    {
+        let _ = write!(
+            stream,
+            "HTTP/1.1 503 Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        return;
+    }
     let result = match request["method"].as_str().unwrap() {
         "getGenesisHash" => json!("synthetic-local-genesis"),
         "getMinimumBalanceForRentExemption" => json!(890880),
@@ -63,7 +75,9 @@ fn respond(
             json!("wrong-signature")
         }
         "getSignatureStatuses" => {
-            if delivered.load(Ordering::SeqCst) {
+            if delivered.load(Ordering::SeqCst)
+                && (mode != "reconcile" || recovered.load(Ordering::SeqCst))
+            {
                 json!({"value":[{"slot":43,"confirmationStatus":"finalized","err":null}]})
             } else {
                 json!({"value":[null]})
@@ -92,7 +106,10 @@ async fn scenario(mode: &'static str) {
     let sends = Arc::new(AtomicUsize::new(0));
     let flag = stop.clone();
     let count = sends.clone();
+    let recovered = Arc::new(AtomicBool::new(false));
+    let recovered_server = recovered.clone();
     let server = std::thread::spawn(move || {
+        let polls = Arc::new(AtomicUsize::new(0));
         let delivered = Arc::new(AtomicBool::new(false));
         let mut children = vec![];
         while !flag.load(Ordering::SeqCst) {
@@ -100,7 +117,11 @@ async fn scenario(mode: &'static str) {
                 Ok((stream, _)) => {
                     let d = delivered.clone();
                     let s = count.clone();
-                    children.push(std::thread::spawn(move || respond(stream, d, s, mode)));
+                    let r = recovered_server.clone();
+                    let p = polls.clone();
+                    children.push(std::thread::spawn(move || {
+                        respond(stream, d, s, mode, r, p)
+                    }));
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     std::thread::sleep(Duration::from_millis(2))
@@ -118,13 +139,42 @@ async fn scenario(mode: &'static str) {
     config.submission.request_timeout_ms = 100;
     config.limits.max_http_requests_per_second = 1000;
     config.observation.poll_interval_ms = 10;
-    config.observation.deadline_ms = 2000;
+    config.observation.deadline_ms = if mode == "reconcile" { 150 } else { 3000 };
     let result = txtrail::runner::send(&config, &key, Workload::Transfer).await;
+    let path = result.unwrap();
+    if mode == "reconcile" {
+        let before = txtrail::store::read(&path).unwrap();
+        let report = txtrail::report::build(&before).unwrap();
+        assert_eq!(
+            report.transactions[0].outcome,
+            Outcome::UnresolvedAtDeadline
+        );
+        recovered.store(true, Ordering::SeqCst);
+        txtrail::runner::reconcile(&config, &path).await.unwrap();
+        let after = txtrail::store::read(&path).unwrap();
+        assert_eq!(
+            &after.events[..before.events.len()],
+            before.events.as_slice()
+        );
+        let report = txtrail::report::build(&after).unwrap();
+        assert_eq!(report.transactions[0].finalized_ms, None);
+        assert_ne!(
+            after.events.first().unwrap().session_id,
+            after.events.last().unwrap().session_id
+        );
+    }
     stop.store(true, Ordering::SeqCst);
     server.join().unwrap();
-    let path = result.unwrap();
     let input = txtrail::store::read(&path).unwrap();
     let states = txtrail::reducer::replay(&input.events).unwrap();
+    if mode == "outage" {
+        assert!(
+            input
+                .events
+                .iter()
+                .any(|e| matches!(e.event, txtrail::model::Event::ObserverUnavailable { .. }))
+        );
+    }
     assert_eq!(states.len(), 1);
     let state = states.values().next().unwrap();
     assert_eq!(state.outcome(), Outcome::FinalizedSuccess);
@@ -144,4 +194,13 @@ async fn acknowledgement_timeout_then_finalization() {
 #[tokio::test]
 async fn mismatched_acknowledgement_does_not_prevent_observation() {
     scenario("mismatch").await;
+}
+
+#[tokio::test]
+async fn temporary_observer_outage_recovers() {
+    scenario("outage").await;
+}
+#[tokio::test]
+async fn reconciliation_appends_new_session_without_resending() {
+    scenario("reconcile").await;
 }
