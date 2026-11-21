@@ -1,4 +1,0 @@
-rustc 1.91.0 (f8297e351 2025-10-28)
-cargo 1.91.0 (ea2d97820 2025-10-10)
-solana-cli 4.0.0 (src:a5517b29; feat:dda54cf7, client:Agave)
-solana-test-validator 4.0.0 (src:a5517b29; feat:dda54cf7, client:Agave)

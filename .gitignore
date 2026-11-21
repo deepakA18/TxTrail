@@ -3,3 +3,12 @@
 runs/
 IMPLEMENTAION.md
 /docs/
+METHODOLOGY.md
+examples/local-success-report.md
+
+# Local release notes and generated output
+/examples/README.md
+/config/README.md
+/examples/*-report.md
+/examples/traces/
+/examples/*-bench.csv

@@ -94,6 +94,9 @@ impl Config {
         if self.submission.client_resubmissions != 0 {
             return Err("client_resubmissions must be 0 in v1".into());
         }
+        if self.observation.target_commitment != Commitment::Finalized {
+            return Err("v1 requires observation.target_commitment = finalized".into());
+        }
         if self.observation.websocket_enabled {
             return Err("WebSocket observation is not implemented; use polling".into());
         }

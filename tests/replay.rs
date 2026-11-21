@@ -283,3 +283,22 @@ fn conflicting_terminal_attempt_response_is_atomic() {
     assert!(apply_event(&mut state, &rejection).is_err());
     assert_eq!(state, before);
 }
+
+#[test]
+fn rejected_submission_remains_distinct_when_observation_deadline_ends() {
+    let mut input = events(include_str!("fixtures/preflight-rejection.jsonl"));
+    let mut deadline = input.last().unwrap().clone();
+    deadline.sequence += 1;
+    deadline.event_id = "rejection-deadline".into();
+    deadline.event = Event::ObservationDeadlineReached { deadline_ms: 1000 };
+    input.push(deadline);
+    let state = replay(&input).unwrap();
+    assert_eq!(
+        state["fixture-tx"].outcome(),
+        Outcome::SubmissionRejectedNoChainEvidence
+    );
+    assert_eq!(
+        state["fixture-tx"].observation,
+        ObservationState::DeadlineReached
+    );
+}

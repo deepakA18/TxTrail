@@ -251,14 +251,6 @@ impl TransactionState {
             ExecutionState::FinalizedError => return Outcome::FinalizedExecutionError,
             _ => {}
         }
-        if self.validity == ValidityState::ValidityWindowPassed
-            && self.execution == ExecutionState::Unobserved
-        {
-            return Outcome::UnobservedAfterValidityWindow;
-        }
-        if self.observation == ObservationState::DeadlineReached {
-            return Outcome::UnresolvedAtDeadline;
-        }
         if self.execution == ExecutionState::Unobserved
             && !self.attempts.is_empty()
             && self
@@ -267,6 +259,14 @@ impl TransactionState {
                 .all(|s| *s == SubmissionState::Rejected)
         {
             return Outcome::SubmissionRejectedNoChainEvidence;
+        }
+        if self.validity == ValidityState::ValidityWindowPassed
+            && self.execution == ExecutionState::Unobserved
+        {
+            return Outcome::UnobservedAfterValidityWindow;
+        }
+        if self.observation == ObservationState::DeadlineReached {
+            return Outcome::UnresolvedAtDeadline;
         }
         Outcome::Pending
     }

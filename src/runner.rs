@@ -141,7 +141,10 @@ pub async fn send(config: &Config, keypair: &Path, workload: Workload) -> Result
                 )
                 .await?;
             // No automatic resend, even if HTTP times out after server acceptance.
-            let response=rpc.call("sendTransaction",json!([prepared.wire,{"encoding":"base64","skipPreflight":skip,"preflightCommitment":config.submission.preflight_commitment,"maxRetries":config.submission.rpc_max_retries,"minContextSlot":prepared.context_slot}])).await;
+            let response = tokio::time::timeout(
+                Duration::from_millis(config.observation.deadline_ms),
+                rpc.call("sendTransaction", json!([prepared.wire, {"encoding":"base64", "skipPreflight":skip, "preflightCommitment":config.submission.preflight_commitment, "maxRetries":config.submission.rpc_max_retries, "minContextSlot":prepared.context_slot}]))
+            ).await.unwrap_or_else(|_| Err(crate::rpc::RpcError { category: "submission_budget_exceeded".into(), rpc: None, transport: Some(TransportFailureKind::Timeout) }));
             match response {
                 Ok(value) if value.as_str() == Some(&prepared.signature) => {
                     capture
