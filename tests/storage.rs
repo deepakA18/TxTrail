@@ -73,3 +73,46 @@ fn report_metrics_have_hand_calculated_values() {
     assert_eq!(r.unresolved_fraction, Some(1.0));
     assert_eq!(r.finalized_latency.samples, 0);
 }
+
+#[test]
+fn mixed_outcomes_keep_unknowns_in_denominator_and_deduplicate_ack_samples() {
+    let mut input = parse_jsonl(FIXTURE).unwrap();
+    let mut ack = input.events[2].clone();
+    ack.event_id = "second-ack-same-attempt".into();
+    ack.sequence = 5;
+    ack.elapsed_ns += 1000000;
+    input.events.push(ack);
+    let mut unresolved = parse_jsonl(include_str!("fixtures/unresolved-deadline.jsonl")).unwrap();
+    for (i, e) in unresolved.events.iter_mut().enumerate() {
+        e.run_id = "fixture-run".into();
+        e.transaction_id = "second-transaction".into();
+        e.signature = Some("second-signature".into());
+        e.event_id = format!("second-{i}");
+        e.sequence = (6 + i) as u64;
+        if let Event::TransactionPrepared { signature, .. } = &mut e.event {
+            *signature = "second-signature".into();
+        }
+        if let Event::RpcAcknowledged { returned_signature } = &mut e.event {
+            *returned_signature = "second-signature".into();
+        }
+    }
+    input.events.extend(unresolved.events);
+    let r = txtrail::report::build(&input).unwrap();
+    assert_eq!(r.submitted, 2);
+    assert_eq!(r.success_fraction, Some(0.5));
+    assert_eq!(r.unresolved_fraction, Some(0.5));
+    assert_eq!(r.finalized_transactions, 1);
+    assert_eq!(r.non_finalized_transactions, 1);
+    assert_eq!(r.transactions[0].acknowledgement_ms, vec![1.0]);
+    assert_eq!(r.finalized_latency.samples, 1);
+    input.warnings.push("event queue saturated".into());
+    let limited = txtrail::report::build(&input).unwrap();
+    assert!(!limited.capture_complete);
+    assert_eq!(limited.finalized_latency.samples, 0);
+    assert!(
+        limited
+            .transactions
+            .iter()
+            .all(|t| t.acknowledgement_ms.is_empty())
+    );
+}

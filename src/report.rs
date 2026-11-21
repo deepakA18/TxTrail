@@ -28,6 +28,9 @@ pub struct Report {
     pub rejected: usize,
     pub unresolved: usize,
     pub success_fraction: Option<f64>,
+    pub finalized_error_fraction: Option<f64>,
+    pub finalized_transactions: usize,
+    pub non_finalized_transactions: usize,
     pub unresolved_fraction: Option<f64>,
     pub finalized_latency: Quantiles,
     pub capture_complete: bool,
@@ -126,12 +129,14 @@ pub fn build(input: &ReadResult) -> Result<Report, String> {
                 }
             )
         });
+        let mut acknowledged_attempts = std::collections::BTreeSet::new();
         let acknowledgement_ms = if saturated {
             vec![]
         } else {
             evidence
                 .iter()
                 .filter(|e| matches!(e.event, Event::RpcAcknowledged { .. }))
+                .filter(|e| acknowledged_attempts.insert(e.attempt_id.clone()))
                 .filter_map(|ack| {
                     evidence
                         .iter()
@@ -199,6 +204,9 @@ pub fn build(input: &ReadResult) -> Result<Report, String> {
         rejected,
         unresolved,
         success_fraction: fraction(finalized_success),
+        finalized_error_fraction: fraction(finalized_error),
+        finalized_transactions: finalized_success + finalized_error,
+        non_finalized_transactions: submitted - finalized_success - finalized_error,
         unresolved_fraction: fraction(unresolved),
         finalized_latency,
         capture_complete,
