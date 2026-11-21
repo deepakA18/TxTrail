@@ -109,7 +109,7 @@ The opt-in test submits three local transactions, including intentional failures
 
 Durations use monotonic time within one process session. They include polling and request scheduling, so they measure client observation latency, not true execution time. Reconciliation cannot establish cross-session latency. Success and unresolved fractions include all unique submitted transactions in their denominator. Quantiles use nearest rank and disclose sample count; small samples do not establish tail performance. Saturated capture suppresses latency estimates.
 
-On 21 November 2026, local Agave 4.0.0 validation passed success, preflight rejection, and landed execution failure. Public devnet health checks passed, but its faucet request failed; no devnet submission was validated. WebSocket support remains deferred.
+On 21 November 2026, local Agave 4.0.0 validation passed success, preflight rejection, and landed execution failure. On 22 November 2026 (Asia/Kolkata), after the test wallet was funded, one public-devnet transfer finalized successfully with complete event capture. Finalized transaction details confirmed no execution error at slot 524805636, with a 5,000-lamport fee. [View the devnet transaction](https://explorer.solana.com/tx/489C17Xbi8kzCnSBKp8TvsmezGtCRxgoPB3kgvb8knWoWmLWr6Ww7fxoskD4KcZqPHLtfsCcevyL5iak6qfWuEqa?cluster=devnet). The faucet blocker is cleared; optional WebSocket support remains deferred.
 
 Reproduce the serialization experiment:
 
