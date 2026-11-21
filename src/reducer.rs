@@ -68,6 +68,7 @@ pub fn apply_event(state: &mut TransactionState, envelope: &EventEnvelope) -> Re
     match &envelope.event {
         Event::RunStarted { .. }
         | Event::RunFinished { .. }
+        | Event::RpcDiagnostic { .. }
         | Event::ReceivedNotification
         | Event::TransactionDetailsObserved { .. } => {}
         Event::SendStarted { .. } => {

@@ -1,7 +1,8 @@
 use crate::model::Commitment;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     pub cluster: Cluster,
     pub rpc_url: String,
@@ -13,7 +14,8 @@ pub struct Config {
     pub limits: LimitsConfig,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SubmissionConfig {
     pub skip_preflight: bool,
     pub preflight_commitment: Commitment,
@@ -22,7 +24,8 @@ pub struct SubmissionConfig {
     pub request_timeout_ms: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ObservationConfig {
     pub target_commitment: Commitment,
     pub poll_interval_ms: u64,
@@ -31,13 +34,15 @@ pub struct ObservationConfig {
     pub websocket_enabled: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LimitsConfig {
     pub max_in_flight_transactions: u64,
     pub max_http_requests_per_second: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "lowercase")]
 pub enum Cluster {
     Local,
@@ -86,6 +91,46 @@ impl Config {
             return Err("output dir must not be empty".into());
         }
 
+        if self.submission.client_resubmissions != 0 {
+            return Err("client_resubmissions must be 0 in v1".into());
+        }
+        if self.observation.websocket_enabled {
+            return Err("WebSocket observation is not implemented; use polling".into());
+        }
+        if self.limits.max_in_flight_transactions != 1 {
+            return Err("v1 supports one transaction at a time".into());
+        }
+        let url = reqwest::Url::parse(&self.rpc_url).map_err(|_| "Invalid RPC URL")?;
+        if !["http", "https"].contains(&url.scheme())
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.query().is_some()
+            || url.fragment().is_some()
+        {
+            return Err("RPC URL must be HTTP(S) without credentials, query, or fragment".into());
+        }
+        let host = url.host_str().unwrap_or("").trim_matches(['[', ']']);
+        let loopback = host == "localhost"
+            || host
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback());
+        match self.cluster {
+            Cluster::Local if !loopback => {
+                return Err("local profile requires a loopback endpoint".into());
+            }
+            Cluster::Devnet if url.as_str() != "https://api.devnet.solana.com/" => {
+                return Err("devnet profile requires https://api.devnet.solana.com".into());
+            }
+            _ => {}
+        }
+        if !self
+            .route_id
+            .chars()
+            .chain(self.observer_id.chars())
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+        {
+            return Err("route/observer aliases must use letters, numbers, '-' or '_'".into());
+        }
         Ok(())
     }
 

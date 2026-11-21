@@ -49,6 +49,12 @@ pub enum Event {
         rpc_max_retries: u64,
     },
     ReceivedNotification,
+    RpcDiagnostic {
+        method: String,
+        request_id: u64,
+        category: String,
+        retry_after_ms: Option<u64>,
+    },
     ObserverUnavailable {
         cause: String,
         retry_after_ms: Option<u64>,
